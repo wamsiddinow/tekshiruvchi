@@ -355,10 +355,10 @@
 
         async function fetchCounts() {
             try {
-                let res = await fetch('http://localhost:8000/targets_count');
+                let res = await fetch('/targets_count');
                 if (res.ok) counts.instagram = (await res.json()).count;
 
-                res = await fetch('http://localhost:8000/youtube_targets_count');
+                res = await fetch('/youtube_targets_count');
                 if (res.ok) counts.youtube = (await res.json()).count;
             } catch (e) { console.error(e); }
         }
@@ -417,7 +417,7 @@
             btn.innerText = 'Kuting...';
 
             try {
-                const response = await fetch('http://localhost:8000' + endpoint, {
+                const response = await fetch(endpoint, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(body)
