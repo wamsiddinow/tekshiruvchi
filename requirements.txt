@@ -1,6 +1,5 @@
 fastapi
 uvicorn
-fastapi
-uvicorn
 instaloader
 google-api-python-client
+aiohttp
