@@ -100,7 +100,7 @@ async def has_api_key():
 def get_master_instaloader_sync():
     """Blocking Instaloader setup/login."""
     L = instaloader.Instaloader()
-    L.context.user_agent = "Mozilla/5.0 (iPhone; CPU iPhone OS 15_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Instagram 243.1.0.14.111 (iPhone13,3; iOS 15_5; en_US; en-US; scale=3.00; 1170x2532; 382468104)"
+    L.context.user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
     
     session_file = f"{MASTER_USERNAME}_session"
     session_path = os.path.join(os.getcwd(), session_file)
