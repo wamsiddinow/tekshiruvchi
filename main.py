@@ -266,6 +266,32 @@ async def check_youtube_stream(request: YouTubeCheckRequest):
 
     handle = request.handle.strip()
     
+    # Robust URL Parsing
+    if "youtube.com" in handle or "youtu.be" in handle:
+        # Remove query parameters
+        handle = handle.split("?")[0]
+        # Extract based on common patterns
+        if "/channel/" in handle:
+            handle = handle.split("/channel/")[-1]
+        elif "/@" in handle:
+             handle = "@" + handle.split("/@")[-1]
+        elif "/c/" in handle:
+             handle = " ".join(handle.split("/c/")[-1].split("/")) # Fallback to search
+        elif "/user/" in handle:
+             handle = handle.split("/user/")[-1]
+        else:
+             # Last segment might be the handle/id/name
+             handle = handle.strip("/").split("/")[-1]
+             if not handle.startswith("@") and not handle.startswith("UC"):
+                 # Likely a custom URL name, treat as such
+                 pass
+    
+    # Ensure proper cleaning for @ if user forgot it for handle search but we detected it's not an ID
+    if not handle.startswith("UC") and not handle.startswith("@") and len(handle) < 24:
+         # Could be a legacy username OR a handle without @. 
+         # We'll treat it as is, and let the strategies (Handle -> Username -> Search) figure it out.
+         pass
+    
     if not os.path.exists(YOUTUBE_TARGETS_FILE):
         yield json.dumps({"error": "youtube_targets.txt fayli topilmadi"}) + "\n"
         return
@@ -304,6 +330,19 @@ async def check_youtube_stream(request: YouTubeCheckRequest):
                     handle_query = handle if handle.startswith("@") else f"@{handle}"
                     ch_resp = await asyncio.to_thread(
                         youtube.channels().list(forHandle=handle_query, part="id,snippet").execute
+                    )
+                    if ch_resp.get("items"):
+                        user_channel_id = ch_resp["items"][0]["id"]
+                except HttpError:
+                    pass
+
+            # B2. Try Legacy Username (forUsername)
+            if not user_channel_id:
+                try:
+                    # Try without @ (legacy usernames usually don't have @)
+                    clean_username = handle.replace("@", "")
+                    ch_resp = await asyncio.to_thread(
+                        youtube.channels().list(forUsername=clean_username, part="id,snippet").execute
                     )
                     if ch_resp.get("items"):
                         user_channel_id = ch_resp["items"][0]["id"]
