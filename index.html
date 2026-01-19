@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="uz">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Obuna Tekshiruvi</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-gradient: linear-gradient(135deg, #833ab4, #fd1d1d, #fcb045);
+            --youtube-gradient: #ff0000;
+            --glass-bg: rgba(255, 255, 255, 0.95);
+            --text-color: #262626;
+            --secondary-text: #8e8e8e;
+            --border-color: #dbdbdb;
+            --success-color: #0095f6;
+            --error-color: #ed4956;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #fafafa;
+            background-image:
+                radial-gradient(circle at 10% 20%, rgb(239, 246, 255) 0%, transparent 20%),
+                radial-gradient(circle at 90% 80%, rgb(255, 240, 245) 0%, transparent 20%);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            background-color: var(--glass-bg);
+            padding: 2.5rem;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+            width: 100%;
+            max-width: 480px;
+            /* Slightly wider for columns */
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            backdrop-filter: blur(10px);
+            transition: transform 0.3s ease;
+        }
+
+        .logo-area {
+            margin-bottom: 2rem;
+        }
+
+        .service-logo {
+            width: 60px;
+            height: 60px;
+            background: var(--primary-gradient);
+            border-radius: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1rem;
+            color: white;
+            box-shadow: 0 4px 15px rgba(253, 29, 29, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin: 0 0 0.5rem;
+        }
+
+        p.subtitle {
+            font-size: 0.95rem;
+            color: var(--secondary-text);
+            margin-bottom: 2rem;
+        }
+
+        /* TABS */
+        .tabs {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 2rem;
+            background: #eff3f6;
+            padding: 4px;
+            border-radius: 14px;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 10px;
+            cursor: pointer;
+            border-radius: 12px;
+            font-weight: 600;
+            color: #8e8e8e;
+            transition: all 0.2s ease;
+            font-size: 0.95rem;
+        }
+
+        .tab.active {
+            background: white;
+            color: var(--text-color);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .input-group {
+            margin-bottom: 1.2rem;
+            text-align: left;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-left: 4px;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 14px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            font-size: 1rem;
+            box-sizing: border-box;
+            outline: none;
+            transition: all 0.2s ease;
+            background: #fafafa;
+        }
+
+        input[type="text"]:focus {
+            border-color: #8e8e8e;
+            background: white;
+            box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.03);
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            background: var(--success-color);
+            border: none;
+            border-radius: 12px;
+            color: white;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-top: 1rem;
+            box-shadow: 0 4px 12px rgba(0, 149, 246, 0.25);
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+            filter: brightness(1.1);
+        }
+
+        button:active {
+            transform: translateY(1px);
+        }
+
+        button:disabled {
+            background-color: #b2dffc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        #results {
+            margin-top: 2rem;
+            text-align: left;
+        }
+
+        .result-item {
+            display: flex;
+            flex-direction: column;
+            padding: 14px;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background 0.2s;
+            gap: 8px;
+        }
+
+        .result-item:hover {
+            background-color: #fafafa;
+            border-radius: 8px;
+        }
+
+        .result-item:last-child {
+            border-bottom: none;
+        }
+
+        .result-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-weight: 600;
+            color: #262626;
+        }
+
+        .result-details {
+            display: flex;
+            gap: 6px;
+            font-size: 0.85rem;
+            flex-wrap: wrap;
+        }
+
+        .status {
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-weight: 500;
+            font-size: 0.8rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .status.following {
+            background-color: #eafbf0;
+            color: #2ecc71;
+        }
+
+        .status.not-following {
+            background-color: #fff0f0;
+            color: #e74c3c;
+        }
+
+        .loading {
+            display: none;
+            margin-top: 1.5rem;
+            font-size: 0.9rem;
+            color: var(--secondary-text);
+        }
+
+        .loading-spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid var(--success-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .error {
+            background-color: #fff0f0;
+            color: var(--error-color);
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 1.5rem;
+            font-size: 0.9rem;
+            display: none;
+            text-align: left;
+            border: 1px solid #ffdbdb;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="logo-area">
+            <div class="service-logo" id="mainLogo">
+                <!-- SVG Icon (Insta default) -->
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
+                    <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
+                    <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
+                </svg>
+            </div>
+            <h1>Obuna Tekshiruvi</h1>
+            <p class="subtitle">Instagram va YouTube obunalarini tekshirish</p>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('instagram')">Instagram</div>
+            <div class="tab" onclick="switchTab('youtube')">YouTube</div>
+        </div>
+
+        <!-- INSTAGRAM FORM -->
+        <div id="instagram-form">
+            <div class="input-group">
+                <label for="my_login">Sizning Instagram Loginingiz</label>
+                <input type="text" id="my_login" placeholder="Masalan: alisher_uz">
+            </div>
+
+            <div
+                style="text-align: left; background: #fff8e1; padding: 12px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #ffecb3;">
+                <p style="margin:0 0 8px 0; font-size: 0.9rem; color: #f57f17; font-weight:600;">
+                    ⚠️ Diqqat: Profilingiz "Ochiq" (Public) bo'lishi shart!
+                </p>
+                <ul style="margin:0; padding-left: 20px; font-size: 0.85rem; color: #444; line-height: 1.4;">
+                    <li>Agar dastur ishlamasa yoki "Xato" chiqsa:</li>
+                    <li>Instagram <strong>Settings</strong> -> <strong>Privacy</strong> ga kiring.</li>
+                    <li><strong>Private Account</strong> ni <strong>O'CHIRIB QO'YING</strong>.</li>
+                </ul>
+            </div>
+
+            <button id="checkBtn" onclick="checkService('instagram')">Instagramni Tekshirish</button>
+        </div>
+
+        <!-- YOUTUBE FORM -->
+        <div id="youtube-form" style="display: none;">
+            <div class="input-group">
+                <label for="yt_handle">YouTube Handle</label>
+                <input type="text" id="yt_handle" placeholder="Masalan: @alisher_vlog yoki Channel ID">
+            </div>
+
+            <div
+                style="text-align: left; background: #fff8e1; padding: 12px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #ffecb3;">
+                <p style="margin:0 0 8px 0; font-size: 0.9rem; color: #f57f17; font-weight:600;">
+                    ⚠️ Diqqat: Obunalaringiz "Ochiq" (Public) bo'lishi shart!
+                </p>
+                <ul style="margin:0; padding-left: 20px; font-size: 0.85rem; color: #444; line-height: 1.4;">
+                    <li>Agar siz obuna bo'lsangiz ham "Obuna yo'q" deb chiqsa:</li>
+                    <li><a href="https://www.youtube.com/account_privacy" target="_blank"
+                            style="color:#e65100; text-decoration:underline;">YouTube Sozlamalari (Privacy)</a> ga
+                        kiring.</li>
+                    <li><strong>"Keep all my subscriptions private"</strong> (Obunalarimni maxfiy saqlash) ni
+                        <strong>O'CHIRIB QO'YING</strong>.
+                    </li>
+                </ul>
+            </div>
+
+            <button id="checkYtBtn" onclick="checkService('youtube')"
+                style="background: var(--youtube-gradient); box-shadow: 0 4px 12px rgba(255, 0, 0, 0.25);">YouTubeni
+                Tekshirish</button>
+        </div>
+
+        <div id="loading" class="loading">
+            <div class="loading-spinner" id="spinner"></div>
+            Tekshirilmoqda...<br>
+            <span id="loading-text" style="font-size: 0.8em; color: #8e8e8e;">Hisoblanmoqda...</span>
+        </div>
+
+        <div id="error" class="error"></div>
+        <div id="results"></div>
+    </div>
+
+    <script>
+        let counts = { instagram: 0, youtube: 0 };
+        const svgs = {
+            instagram: `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>`,
+            youtube: `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.97-2C18.88 4 12 4 12 4s-6.88 0-8.5.46a2.78 2.78 0 0 0-1.97 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.46 19c1.72.46 8.54.46 8.54.46s6.88 0 8.5-.46a2.78 2.78 0 0 0 1.97-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"></path><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02" fill="white" stroke="none"></polygon></svg>`
+        };
+
+        async function fetchCounts() {
+            try {
+                let res = await fetch('http://localhost:8000/targets_count');
+                if (res.ok) counts.instagram = (await res.json()).count;
+
+                res = await fetch('http://localhost:8000/youtube_targets_count');
+                if (res.ok) counts.youtube = (await res.json()).count;
+            } catch (e) { console.error(e); }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchCounts().then(() => updateEstimate('instagram'));
+        });
+
+        function switchTab(service) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+
+            document.getElementById('instagram-form').style.display = service === 'instagram' ? 'block' : 'none';
+            document.getElementById('youtube-form').style.display = service === 'youtube' ? 'block' : 'none';
+
+            const logo = document.getElementById('mainLogo');
+            logo.innerHTML = svgs[service];
+
+            if (service === 'instagram') {
+                logo.style.background = 'var(--primary-gradient)';
+                logo.style.boxShadow = '0 4px 15px rgba(253, 29, 29, 0.3)';
+                updateEstimate('instagram');
+            } else {
+                logo.style.background = 'var(--youtube-gradient)';
+                logo.style.boxShadow = '0 4px 15px rgba(255, 0, 0, 0.3)';
+                updateEstimate('youtube');
+            }
+
+            document.getElementById('results').innerHTML = '';
+            document.getElementById('error').style.display = 'none';
+        }
+
+        function updateEstimate(service) {
+            const count = counts[service];
+            const text = document.getElementById('loading-text');
+            text.innerText = `${service === 'instagram' ? 'Profil' : 'Kanal'} soni: ${count} ta.`;
+        }
+
+        async function checkService(service) {
+            const btn = document.getElementById(service === 'instagram' ? 'checkBtn' : 'checkYtBtn');
+            const handle = service === 'instagram' ? document.getElementById('my_login').value : document.getElementById('yt_handle').value;
+            const endpoint = service === 'instagram' ? '/check' : '/check_youtube';
+            const body = service === 'instagram'
+                ? { login: handle, password: "" }
+                : { handle: handle };
+
+            if (!handle) {
+                showError('Iltimos, ma\'lumotlarni kiriting!');
+                return;
+            }
+
+            document.getElementById('results').innerHTML = '';
+            document.getElementById('error').style.display = 'none';
+            document.getElementById('loading').style.display = 'block';
+            btn.disabled = true;
+            btn.innerText = 'Kuting...';
+
+            try {
+                const response = await fetch('http://localhost:8000' + endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop();
+
+                    for (const line of lines) {
+                        if (!line.trim()) continue;
+                        try {
+                            const item = JSON.parse(line);
+                            if (item.error) { showError(item.error); continue; }
+
+                            // Only update text for info/checking status
+                            if (item.status === 'info' || item.status === 'checking') {
+                                if (item.message) document.getElementById('loading-text').innerText = item.message;
+                                continue;
+                            }
+
+                            if (item.target && item.status === 'found') {
+                                renderResult(item, service);
+                                window.scrollTo(0, document.body.scrollHeight);
+                            }
+                        } catch (e) { console.error(e); }
+                    }
+                }
+            } catch (err) {
+                showError(err.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerText = service === 'instagram' ? 'Instagramni Tekshirish' : 'YouTubeni Tekshirish';
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        function renderResult(item, service) {
+            let followStatus = item.is_following
+                ? '<span class="status following">✓ Obuna</span>'
+                : '<span class="status not-following">✕ Obuna yo\'q</span>';
+
+            if (item.status === 'not_found_target') followStatus = '<span class="status" style="background:#eee;color:#777">? Topilmadi</span>';
+
+            const div = document.createElement('div');
+            div.className = 'result-item';
+            div.innerHTML = `
+                <div class="result-header">
+                    <span>${item.target}</span>
+                </div>
+                <div class="result-details">
+                    ${followStatus}
+                </div>
+            `;
+            document.getElementById('results').appendChild(div);
+        }
+
+        function showError(msg) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.innerText = msg;
+            errorDiv.style.display = 'block';
+        }
+    </script>
+</body>
+
+</html>
