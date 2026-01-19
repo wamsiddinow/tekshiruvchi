@@ -9,6 +9,7 @@ import json
 import asyncio
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from concurrent.futures import ThreadPoolExecutor
 
 app = FastAPI()
 
@@ -22,6 +23,9 @@ YOUTUBE_API_KEY_FILE = "youtube_api_key.txt"
 MASTER_USERNAME = os.getenv("IG_USERNAME", "shamsiddinov_abbos")
 MASTER_PASSWORD = os.getenv("IG_PASSWORD", "eA5!Ikml01v9-iX")
 
+# Executor for blocking synchronous calls
+executor = ThreadPoolExecutor(max_workers=5)
+
 # --- MODELS ---
 class CheckRequest(BaseModel):
     login: str
@@ -30,6 +34,7 @@ class CheckRequest(BaseModel):
 
 class YouTubeCheckRequest(BaseModel):
     handle: str
+    api_key: str = "" # Added field for optional client-side key
 
 # --- MIDDLEWARE ---
 app.add_middleware(
@@ -39,6 +44,28 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# --- CACHING UTILS ---
+file_cache = {}
+
+def get_cached_lines(filename):
+    """Reads lines from a file with mtime caching."""
+    if not os.path.exists(filename):
+        return []
+    
+    mtime = os.path.getmtime(filename)
+    if filename in file_cache:
+        cached_mtime, lines = file_cache[filename]
+        if cached_mtime == mtime:
+            return lines
+
+    with open(filename, "r") as f:
+        lines = [line.strip() for line in f.readlines() if line.strip()]
+        file_cache[filename] = (mtime, lines)
+        return lines
+
+# YouTube Channel ID Cache: { "handle_or_name": "UC..." }
+yt_channel_cache = {}
 
 # --- ROUTES ---
 
@@ -51,21 +78,13 @@ async def read_root():
 
 @app.get("/targets_count")
 async def get_targets_count():
-    count = 0
-    if os.path.exists(MALUMOTLAR_FILE):
-        with open(MALUMOTLAR_FILE, "r") as f:
-            lines = [line.strip() for line in f.readlines() if line.strip()]
-            count = len(lines)
-    return {"count": count}
+    lines = get_cached_lines(MALUMOTLAR_FILE)
+    return {"count": len(lines)}
 
 @app.get("/youtube_targets_count")
 async def get_yt_targets_count():
-    count = 0
-    if os.path.exists(YOUTUBE_TARGETS_FILE):
-        with open(YOUTUBE_TARGETS_FILE, "r") as f:
-            lines = [line.strip() for line in f.readlines() if line.strip()]
-            count = len(lines)
-    return {"count": count}
+    lines = get_cached_lines(YOUTUBE_TARGETS_FILE)
+    return {"count": len(lines)}
 
 @app.get("/has_api_key")
 async def has_api_key():
@@ -78,12 +97,9 @@ async def has_api_key():
 
 # --- INSTAGRAM LOGIC ---
 
-def get_master_instaloader():
-    """
-    Returns a logged-in Instaloader instance.
-    """
+def get_master_instaloader_sync():
+    """Blocking Instaloader setup/login."""
     L = instaloader.Instaloader()
-    # User Agent imitation logic can be improved or removed if causing issues, but keeping purely as requested logic
     L.context.user_agent = "Mozilla/5.0 (iPhone; CPU iPhone OS 15_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Instagram 243.1.0.14.111 (iPhone13,3; iOS 15_5; en_US; en-US; scale=3.00; 1170x2532; 382468104)"
     
     session_file = f"{MASTER_USERNAME}_session"
@@ -106,8 +122,11 @@ def get_master_instaloader():
             L.save_session_to_file(filename=session_path)
         except Exception as e:
             raise Exception(f"Instagram Login Error: {e}")
-
     return L
+
+async def get_master_instaloader():
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(executor, get_master_instaloader_sync)
 
 @app.post("/check")
 async def check_instagram(request: CheckRequest):
@@ -115,42 +134,74 @@ async def check_instagram(request: CheckRequest):
 
 async def check_instagram_stream(request: CheckRequest):
     if not request.login:
-        yield json.dumps({"error": "Login is required"}) + "\n"
+        yield json.dumps({"error": "Login kiritilishi shart"}) + "\n"
         return
 
     clean_login = request.login.replace("@", "").strip().lower()
     
     if not os.path.exists(MALUMOTLAR_FILE):
-        yield json.dumps({"error": "malumotlar.txt not found"}) + "\n"
+        yield json.dumps({"error": "malumotlar.txt fayli topilmadi"}) + "\n"
         return
 
-    targets = []
-    with open(MALUMOTLAR_FILE, "r") as f:
-        targets = [line.strip().replace("@", "") for line in f.readlines() if line.strip()]
+    targets = get_cached_lines(MALUMOTLAR_FILE)
+    targets = [t.replace("@", "") for t in targets] # Clean targets
 
+    yield json.dumps({"status": "info", "message": "Serverga ulanmoqda..."}) + "\n"
+    
     try:
-        L = get_master_instaloader()
+        L = await get_master_instaloader()
     except Exception as e:
-        yield json.dumps({"error": f"Login Error: {str(e)}"}) + "\n"
+        yield json.dumps({"error": f"Login Hatoligi: {str(e)}"}) + "\n"
         return
 
     target_username = clean_login
+    loop = asyncio.get_running_loop()
 
     try:
-        profile = instaloader.Profile.from_username(L.context, target_username)
+        # Non-blocking profile fetch
+        def fetch_profile():
+            return instaloader.Profile.from_username(L.context, target_username)
+        
+        profile = await loop.run_in_executor(executor, fetch_profile)
         
         if profile.is_private and not profile.followed_by_viewer:
-            yield json.dumps({"error": f"@{target_username} is PRIVATE account."}) + "\n"
+            yield json.dumps({"error": f"@{target_username} profili YOPIQ (Private)."}) + "\n"
             return
              
         target_followees = set()
+        yield json.dumps({"status": "info", "message": "Obunalar ro'yxati yuklanmoqda (Biroz vaqt olishi mumkin)..."}) + "\n"
         
         # Retry mechanism for fetching followees
         retries = 1
         for attempt in range(retries + 1):
             try:
-                for followee in profile.get_followees():
-                    target_followees.add(followee.username)
+                # We can't fully async iterating an iterator, but we can run the whole loop in executor 
+                # OR chunk it. For Instaloader, it's safer to run the whole collection in a thread.
+                # However, streaming progress is hard if we run it all in thread. 
+                # Compromise: Run the heavyweight `get_followees()` construction and iteration in thread, 
+                # but accumulating into a set is fast.
+                # Instaloader fetches in pages.
+                
+                def get_all_followees():
+                    fws = set()
+                    count = 0
+                    for followee in profile.get_followees():
+                        fws.add(followee.username)
+                        count += 1
+                        # We cannot easy yield from executor thread to main async gen.
+                    return fws, count
+
+                # Run blocking fetch in thread
+                # NOTE: This blocks "Progress updates" until complete. 
+                # To bring back progress updates, we'd need a more complex generator wrapper. 
+                # For responsiveness, it's better to just wait for it in background than block the event loop.
+                # If the user has thousands follows, this might take time.
+                
+                yield json.dumps({"status": "info", "message": "Obunalar yuklanmoqda (Fondagi jarayon)..."}) + "\n"
+                
+                target_followees, total_count = await loop.run_in_executor(executor, get_all_followees)
+                
+                yield json.dumps({"status": "info", "message": f"Yuklandi: {total_count} ta. Tekshirilmoqda..."}) + "\n"
                 break
             except Exception as e:
                 if attempt == retries:
@@ -159,41 +210,34 @@ async def check_instagram_stream(request: CheckRequest):
                 await asyncio.sleep(2)
         
         # Check against targets
+        # This is CPU bound but fast for small lists.
+        batch = []
         for required_user in targets:
-            # Engagement Check Skipped/Disabled by request
-            # if request.safe_mode: ... 
-
-            # SKIP ENGAGEMENT CHECK for performance since UI doesn't show it
             is_following = required_user in target_followees
-            is_liked = False
-            is_commented = False
-            like_status = "disabled"
-            comment_status = "disabled"
-            
-            # Artificial Delay REMOVED - In-memory check is safe and fast
-            await asyncio.sleep(0.01)
-
-            # try:
-            #     req_profile = instaloader.Profile.from_username(L.context, required_user)
-            #     ... (Comment/Like logic removed)
-            # except Exception:
-            #     ...
-
             data = {
                 "target": required_user,
                 "is_following": is_following,
-                "is_liked": is_liked,
-                "is_commented": is_commented,
-                "like_status": like_status,
-                "comment_status": comment_status,
+                "is_liked": False,
+                "is_commented": False,
+                "like_status": "disabled",
+                "comment_status": "disabled",
                 "status": "found"
             }
-            yield json.dumps(data) + "\n"
+            batch.append(json.dumps(data) + "\n")
+            
+            # Flush batch every 10 items to reduce overhead
+            if len(batch) >= 10:
+                 yield "".join(batch)
+                 batch = []
+                 await asyncio.sleep(0) # Yield to event loop
+
+        if batch:
+            yield "".join(batch)
 
     except instaloader.ProfileNotExistsException:
-        yield json.dumps({"error": "Instagram profile not found."}) + "\n"
+        yield json.dumps({"error": "Instagram profil topilmadi."}) + "\n"
     except Exception as e:
-        yield json.dumps({"error": f"Check error: {e}"}) + "\n"
+        yield json.dumps({"error": f"Tekshirish xatosi: {e}"}) + "\n"
 
 
 # --- YOUTUBE LOGIC ---
@@ -203,7 +247,7 @@ async def check_youtube(request: YouTubeCheckRequest):
     return StreamingResponse(check_youtube_stream(request), media_type="application/x-ndjson")
 
 async def check_youtube_stream(request: YouTubeCheckRequest):
-    # 1. Get API Key (Env Var first, then Request, then File)
+    # 1. Get API Key
     api_key = os.getenv("YOUTUBE_API_KEY")
     if not api_key:
         api_key = request.api_key.strip()
@@ -216,21 +260,22 @@ async def check_youtube_stream(request: YouTubeCheckRequest):
         yield json.dumps({"error": "YouTube API Key topilmadi (Env Var yoki faylda yo'q)"}) + "\n"
         return
     
-    if not request.handle or not api_key:
-        yield json.dumps({"error": "API Key or Handle missing. Please check youtube_api_key.txt"}) + "\n"
+    if not request.handle:
+        yield json.dumps({"error": "Handle kiritilmadi."}) + "\n"
         return
 
     handle = request.handle.strip()
     
     if not os.path.exists(YOUTUBE_TARGETS_FILE):
-        yield json.dumps({"error": "youtube_targets.txt not found"}) + "\n"
+        yield json.dumps({"error": "youtube_targets.txt fayli topilmadi"}) + "\n"
         return
 
-    targets = []
-    with open(YOUTUBE_TARGETS_FILE, "r") as f:
-         targets = [line.strip() for line in f.readlines() if line.strip()]
+    targets = get_cached_lines(YOUTUBE_TARGETS_FILE)
 
     try:
+        # Create service. Note: build() is technically blocking (http discovery), but usually fast. 
+        # We could cache the service object or discovery doc but simpler to thread it if needed.
+        # usually it's fine.
         youtube = build("youtube", "v3", developerKey=api_key)
         
         # 1. Resolve User Handle to Channel ID
@@ -238,114 +283,113 @@ async def check_youtube_stream(request: YouTubeCheckRequest):
         
         user_channel_id = None
         
-        # A. Try Direct Channel ID (if matches pattern)
-        if handle.startswith("UC") and len(handle) == 24:
-            try:
-                ch_resp = youtube.channels().list(id=handle, part="id,snippet").execute()
-                if ch_resp.get("items"):
-                    user_channel_id = ch_resp["items"][0]["id"]
-                    title = ch_resp["items"][0]["snippet"]["title"]
-                    yield json.dumps({"status": "info", "message": f"ID orqali topildi: {title}"}) + "\n"
-            except HttpError:
-                pass
+        # Check Cache
+        if handle in yt_channel_cache:
+            user_channel_id = yt_channel_cache[handle]
+            yield json.dumps({"status": "info", "message": f"Keshdan topildi: {user_channel_id}"}) + "\n"
 
-        # B. Try Handle (Best Method)
         if not user_channel_id:
-            try:
-                # Add '@' if missing for handle search
-                handle_query = handle if handle.startswith("@") else f"@{handle}"
-                
-                ch_resp = youtube.channels().list(
-                    forHandle=handle_query, 
-                    part="id,snippet"
-                ).execute()
-                
-                if ch_resp.get("items"):
-                    user_channel_id = ch_resp["items"][0]["id"]
-                    title = ch_resp["items"][0]["snippet"]["title"]
-                    yield json.dumps({"status": "info", "message": f"Handle orqali topildi: {title}"}) + "\n"
-            except HttpError:
-                pass
-
-        # C. Fallback to Search
-        if not user_channel_id:
-            # Last resort
-            try:
-                search_response = youtube.search().list(
-                    q=handle, part="id,snippet", type="channel", maxResults=1
-                ).execute()
-                
-                if search_response.get("items"):
-                    user_channel_id = search_response["items"][0]["id"]["channelId"]
-                    title = search_response["items"][0]["snippet"]["title"]
-                    yield json.dumps({"status": "info", "message": f"Qidiruv orqali topildi: {title}"}) + "\n"
-                else:
-                     yield json.dumps({"error": "Bunday YouTube kanal topilmadi. Iltimos, Handle (@user) to'g'ri ekanligiga ishonch hosil qiling."}) + "\n"
-                     return
-            except HttpError as e:
-                yield json.dumps({"error": f"YouTube API Xatosi: {e}"}) + "\n"
-                return
-
-        # 2. Check Subscriptions & Comments for each Target
-        yield json.dumps({"status": "info", "message": "Checking subscriptions & comments..."}) + "\n"
-        
-        for target in targets:
-            yield json.dumps({"status": "checking", "target": target}) + "\n"
-            
-            # A. Resolve Target to ID (if not already ID)
-            target_id = target
-            uploads_playlist_id = None
-            
-            if not target.startswith("UC") or len(target) != 24:
+            # A. Try Direct Channel ID
+            if handle.startswith("UC") and len(handle) == 24:
                 try:
-                    t_search = youtube.search().list(
-                        q=target, part="id", type="channel", maxResults=1
-                    ).execute()
+                    ch_resp = await asyncio.to_thread(youtube.channels().list(id=handle, part="id,snippet").execute)
+                    if ch_resp.get("items"):
+                        user_channel_id = ch_resp["items"][0]["id"]
+                except HttpError:
+                    pass
+
+            # B. Try Handle
+            if not user_channel_id:
+                try:
+                    handle_query = handle if handle.startswith("@") else f"@{handle}"
+                    ch_resp = await asyncio.to_thread(
+                        youtube.channels().list(forHandle=handle_query, part="id,snippet").execute
+                    )
+                    if ch_resp.get("items"):
+                        user_channel_id = ch_resp["items"][0]["id"]
+                except HttpError:
+                    pass
+
+            # C. Fallback to Search
+            if not user_channel_id:
+                try:
+                    search_response = await asyncio.to_thread(
+                        youtube.search().list(q=handle, part="id,snippet", type="channel", maxResults=1).execute
+                    )
+                    if search_response.get("items"):
+                        user_channel_id = search_response["items"][0]["id"]["channelId"]
+                    else:
+                        yield json.dumps({"error": "Bunday YouTube kanal topilmadi."}) + "\n"
+                        return
+                except HttpError as e:
+                    yield json.dumps({"error": f"YouTube API Xatosi: {e}"}) + "\n"
+                    return
+            
+            # Update Cache
+            if user_channel_id:
+                 yt_channel_cache[handle] = user_channel_id
+
+        # 2. Check Subscriptions Concurrently
+        yield json.dumps({"status": "info", "message": "Obunalar tekshirilmoqda..."}) + "\n"
+        
+        # Helper function for checking a single target
+        async def check_single_target(target):
+            target_id = target
+            
+            # Resolve Target ID if needed
+            # (We also cache target IDs implicitly to avoid future lookups? 
+            #  Actually, targets list is static mostly, so we can cache it better)
+            
+            if target in yt_channel_cache:
+                target_id = yt_channel_cache[target]
+            elif not target.startswith("UC") or len(target) != 24:
+                try:
+                    t_search = await asyncio.to_thread(
+                        youtube.search().list(q=target, part="id", type="channel", maxResults=1).execute
+                    )
                     if t_search.get("items"):
                         target_id = t_search["items"][0]["id"]["channelId"]
+                        yt_channel_cache[target] = target_id
                     else:
-                        yield json.dumps({"target": target, "status": "not_found_target"}) + "\n"
-                        continue
+                        return {"target": target, "status": "not_found_target"}
                 except:
-                     yield json.dumps({"target": target, "status": "error_resolving_target"}) + "\n"
-                     continue
-
-            # B. Get Uploads Playlist (for Comment Check)
-            try:
-                ch_resp = youtube.channels().list(id=target_id, part="contentDetails").execute()
-                if ch_resp.get("items"):
-                    uploads_playlist_id = ch_resp["items"][0]["contentDetails"]["relatedPlaylists"]["uploads"]
-            except:
-                pass
-
-            # C. Check Subscription
+                     return {"target": target, "status": "error_resolving_target"}
+            
+            # Check Subscription
             is_following = False
             try:
-                check_sub = youtube.subscriptions().list(
-                    part="snippet", channelId=user_channel_id, forChannelId=target_id
-                ).execute()
+                check_sub = await asyncio.to_thread(
+                    youtube.subscriptions().list(
+                        part="snippet", channelId=user_channel_id, forChannelId=target_id
+                    ).execute
+                )
                 is_following = len(check_sub.get("items", [])) > 0
             except HttpError:
-                 pass # Likely private subscriptions or not found
+                 pass 
             
-            # D. Check Comments (DISABLED)
-            is_commented = False
-            comment_status = "disabled"
-            like_status = "disabled"
-            
-            # Logic removed for performance as requested
-            
-            yield json.dumps({
+            return {
                 "target": target,
                 "status": "found",
                 "is_following": is_following,
                 "is_liked": False,
                 "is_commented": False,
-                "like_status": like_status,
-                "comment_status": comment_status
-            }) + "\n"
-            
-            await asyncio.sleep(0.1) # Minimal delay
+                "like_status": "disabled",
+                "comment_status": "disabled"
+            }
+
+        # Concurrency Control
+        semaphore = asyncio.Semaphore(5) # Max 5 concurrent checks
+        async def sem_check(t):
+            async with semaphore:
+                return await check_single_target(t)
+
+        pending = [sem_check(t) for t in targets]
+        
+        # Stream results as they complete
+        for coro in asyncio.as_completed(pending):
+            result = await coro
+            yield json.dumps(result) + "\n"
 
     except Exception as e:
-        yield json.dumps({"error": f"Global Error: {e}"}) + "\n"
+        yield json.dumps({"error": f"Umumiy Xatolik: {e}"}) + "\n"
+
